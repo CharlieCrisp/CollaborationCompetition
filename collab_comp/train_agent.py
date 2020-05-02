@@ -9,13 +9,13 @@ from collab_comp.progress_tracker import (
     ScoreGraphPlotter,
     ProgressBarTracker,
 )
-from collab_comp.solver import AverageScoreOfMaxSolver
+from collab_comp.solver import AverageScoreSolver
 
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
 
-def main(output_file, n_rollouts):
+def main(n_rollouts):
     print("Creating Unity environment for Tennis app")
     env = UnityEnvironment(file_name="Tennis.app")
 
@@ -24,14 +24,18 @@ def main(output_file, n_rollouts):
     brain = env.brains[brain_name]
 
     print("Initialising PPO Agent")
-    state_size = brain.vector_observation_space_size
+    state_size = brain.vector_observation_space_size * brain.num_stacked_vector_observations
     action_size = brain.vector_action_space_size
     print(f"Using state size {state_size} and action size {action_size}")
 
     num_agents = len(env_info.agents)
-    agent = DDPGAgent(num_agents, state_size, action_size)
-    batch_size = 1
-    solver = AverageScoreOfMaxSolver(
+    batch_size = 2000
+    tau = 1e-3
+    experience_buffer_size = 10000
+    learning_epoch_size = 1000
+
+    agent = DDPGAgent(num_agents, state_size, action_size, learning_epoch_size)
+    solver = AverageScoreSolver(
         solved_score=0.5, solved_score_period=100, num_agents=num_agents
     )
     plotter = ScoreGraphPlotter(
@@ -41,15 +45,13 @@ def main(output_file, n_rollouts):
 
     ddpg(
         agent,
-        num_agents,
-        state_size,
-        action_size,
         env,
         brain_name,
         n_rollouts,
         batch_size,
+        experience_buffer_size,
         solver,
-        output_file,
+        tau,
         [plotter, progress_bar],
     )
 
@@ -66,13 +68,8 @@ if __name__ == "__main__":
         type=int,
         dest="n_rollouts",
         help="The number of trajectories to collect whilst training",
-        default=1000,
+        default=100000,
     )
     args = args_parser.parse_args()
 
-    main(
-        args.filename,
-        args.n_rollouts,
-        args.use_multiple_agents,
-        args.algorithm
-    )
+    main(args.n_rollouts)

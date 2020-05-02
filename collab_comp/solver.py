@@ -4,7 +4,7 @@ from collections import deque
 
 class Solver(abc.ABC):
     @abc.abstractmethod
-    def record_rewards(self, rewards):
+    def record_score(self, score):
         pass
 
     @abc.abstractmethod
@@ -12,14 +12,14 @@ class Solver(abc.ABC):
         pass
 
 
-class AverageScoreOfMaxSolver(Solver):
+class AverageScoreSolver(Solver):
     def __init__(self, num_agents, solved_score, solved_score_period):
-        self.latest_rewards = deque(maxlen=solved_score_period)
+        self.latest_scores = deque(maxlen=solved_score_period)
         self.num_agents = num_agents
         self.solved_score = solved_score
 
-    def record_rewards(self, rewards):
-        self.latest_rewards.append(max(rewards))
+    def record_score(self, score):
+        self.latest_scores.append(score)
 
     def is_solved(self):
-        return (sum(self.latest_rewards) / len(self.latest_rewards)) > self.solved_score
+        return (sum(self.latest_scores) / len(self.latest_scores)) > self.solved_score

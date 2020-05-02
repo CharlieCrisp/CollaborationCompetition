@@ -7,7 +7,7 @@ from progressbar import ProgressBar
 
 class ProgressTracker:
     @abc.abstractmethod
-    def record_score(self, rewards):
+    def record_score(self, score):
         pass
 
 
@@ -59,9 +59,12 @@ class ScoreGraphPlotter(ProgressTracker):
             )
 
     def record_score(self, score):
+        if score > 0:
+            print(score)
         self.scores.append(score)
         self.times = list(range(len(self.scores)))
-        self.__draw()
+        if len(self.scores) % 30 == 0:
+            self.__draw()
 
 
 class ProgressBarTracker(ProgressTracker):
@@ -70,6 +73,6 @@ class ProgressBarTracker(ProgressTracker):
         self.progress_bar = ProgressBar(max_value=n_rollouts)
         self.index = 0
 
-    def record_score(self, rewards):
+    def record_score(self, score):
         self.progress_bar.update(self.index)
         self.index += 1

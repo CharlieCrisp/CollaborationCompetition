@@ -1,11 +1,10 @@
-from typing import Tuple
-
 import numpy as np
 import torch
 import torch.optim as optim
-import torch.nn as nn
+from torch.nn.functional import mse_loss
 
-from collab_comp.policy_nn import Critic, Actor
+from collab_comp.policy_nn import ValueEstimatorNN, ActorNN
+from collab_comp.replay_buffer import PrioritisedReplayBuffer
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -16,58 +15,84 @@ class DDPGAgent:
         num_agents: int,
         state_size: int,
         action_size: int,
+        learning_epoch_size: int,
         epsilon=0.2,
         learning_rate=0.0006,
         saved_weights=None,
     ):
+        self.state_size = state_size
         self.action_size = action_size
+        self.learning_epoch_size = learning_epoch_size
         self.num_agents = num_agents
         self.epsilon = epsilon
+        self.learning_rate = learning_rate
 
-        # TODO - does this require Actor and Critic
+        self.action_value_estimator = ValueEstimatorNN(state_size, action_size).to(device)
+        self.optimal_action_picker = ActorNN(state_size, action_size, seed=0).to(device)
 
-        self.actor = Actor(state_size, action_size, seed=0).to(device)
-        self.old_actor: nn.Module = Actor(state_size, action_size, seed=0).to(device)
-        self.old_actor.load_state_dict(self.actor.state_dict())
-        self.critic = Critic(state_size).to(device)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=learning_rate)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=learning_rate)
+        self.action_value_estimator_optimizer = optim.Adam(self.action_value_estimator.parameters(), lr=learning_rate)
+        self.optimal_action_picker_optimizer = optim.Adam(self.optimal_action_picker.parameters(), lr=learning_rate)
 
         if saved_weights is not None:
-            actor_file, critic_file = saved_weights
-            self.actor.load_state_dict(torch.load(actor_file))
-            self.critic.load_state_dict(torch.load(critic_file))
+            action_value_estimator_file, optimal_action_picker_file = saved_weights
+            self.action_value_estimator.load_state_dict(torch.load(action_value_estimator_file))
+            self.optimal_action_picker.load_state_dict(torch.load(optimal_action_picker_file))
 
-    def act(self, state: torch.Tensor) -> np.ndarray:
-        return self.actor.act(state).detach()
+    def act(self, state: torch.Tensor):
+        return self.optimal_action_picker(state)
 
-    def _log_probabilities_and_entropies_of_actions(
-        self, states: torch.Tensor, actions: torch.Tensor, detach=False
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        :param detach: When true, the calculation will be done detached and therefore will not affect auto-diff.
-                       The output will be treated as a constant when gradients are calculated.
-        :return: The probabilities of taking the given actions from the given states
-        """
-        probs, entropies = self.actor.log_probability_and_entropy_of_action(
-            states, actions
-        )
+    def learn(self, target_agent, experience_replay_buffer: PrioritisedReplayBuffer):
+        (
+            states,
+            actions,
+            rewards,
+            next_states,
+            dones,
+            sampled_indices,
+        ) = experience_replay_buffer.sample(self.learning_epoch_size)
 
-        if detach:
-            probs = probs.detach()
-            entropies = entropies.detach()
-        return probs, entropies
+        # Value estimation update
+        q_estimate = self.action_value_estimator(states, actions)
 
-    def learn(
-        self,
-        states: torch.Tensor,
-        actions: torch.Tensor,
-        future_rewards,
-        num_learning_iterations=80,
-    ):
-        # TODO complete
-        pass
+        target_next_actions = target_agent.optimal_action_picker(next_states).detach()
+        next_state_value = target_agent.action_value_estimator(next_states, target_next_actions).detach()
+        q_target = rewards + (torch.tensor(1) - dones.float()) * next_state_value
+
+        value_loss = (q_estimate - q_target).pow(2)
+
+        self.action_value_estimator_optimizer.zero_grad()
+        value_loss.mean().backward()
+        self.action_value_estimator_optimizer.step()
+
+        # Policy update
+        optimal_actions = self.optimal_action_picker(states)
+        self.action_value_estimator.eval()
+
+        q_estimate_of_optimal_actions = self.action_value_estimator(states, optimal_actions)
+
+        action_loss = -q_estimate_of_optimal_actions
+
+        self.optimal_action_picker_optimizer.zero_grad()
+        action_loss.mean().backward()
+        self.optimal_action_picker_optimizer.step()
+
+        self.action_value_estimator.train()
+
+        return sampled_indices, value_loss
 
     def save_agent_state(self):
-        torch.save(self.actor.state_dict(), "saved_actor.pth")
-        torch.save(self.critic.state_dict(), "saved_critic.pth")
+        torch.save(self.action_value_estimator.state_dict(), "saved_value_estimator.pth")
+        torch.save(self.optimal_action_picker.state_dict(), "saved_actor.pth")
+
+    def copy(self):
+        new_agent = DDPGAgent(
+            self.num_agents,
+            self.state_size,
+            self.action_size,
+            self.learning_epoch_size,
+            self.epsilon,
+            self.learning_rate,
+        )
+        new_agent.action_value_estimator.load_state_dict(self.action_value_estimator.state_dict())
+        new_agent.optimal_action_picker.load_state_dict(self.optimal_action_picker.state_dict())
+        return new_agent

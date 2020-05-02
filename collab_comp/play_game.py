@@ -82,6 +82,5 @@ if __name__ == "__main__":
     )
 
     main(
-        args.n_rollouts,
-        saved_weights,
+        args.n_rollouts, saved_weights,
     )
