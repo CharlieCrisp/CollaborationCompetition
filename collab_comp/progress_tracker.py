@@ -59,8 +59,6 @@ class ScoreGraphPlotter(ProgressTracker):
             )
 
     def record_score(self, score):
-        if score > 0:
-            print(score)
         self.scores.append(score)
         self.times = list(range(len(self.scores)))
         if len(self.scores) % 30 == 0:

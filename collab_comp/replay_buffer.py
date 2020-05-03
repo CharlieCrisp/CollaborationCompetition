@@ -44,7 +44,7 @@ class PrioritisedReplayBuffer:
         self.next_states = deque(maxlen=maxlen)
         self.dones = deque(maxlen=maxlen)
         self.priorities = deque(maxlen=maxlen)
-        self.e = 1e-3
+        self.e = 1e-6
 
     def add_experience(self, state, action, reward, next_state, is_done, priority):
         self.states.append(state)

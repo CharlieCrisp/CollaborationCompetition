@@ -20,30 +20,38 @@ class ActorNN(nn.Module):
         """
         super(ActorNN, self).__init__()
         self.seed = torch.manual_seed(seed)
-        layer1_size = 256
-        layer2_size = 128
+        layer1_size = 128
+        layer2_size = 64
+        layer3_size = 32
         self.layer1 = nn.Linear(state_size, layer1_size)
         self.layer2 = nn.Linear(layer1_size, layer2_size)
-        self.layer3 = nn.Linear(layer2_size, action_size)
+        self.layer3 = nn.Linear(layer2_size, layer3_size)
+        self.layer4 = nn.Linear(layer3_size, action_size)
 
     def forward(self, state):
         x = torch.tanh(self.layer1(state))
         x = torch.tanh(self.layer2(x))
         x = torch.tanh(self.layer3(x))
+        x = torch.tanh(self.layer4(x))
         return x
 
 
 class ValueEstimatorNN(nn.Module):
     def __init__(self, state_size, action_size):
         super(ValueEstimatorNN, self).__init__()
+        layer1_size = 128
+        layer2_size = 64
+        layer3_size = 32
         self.net = nn.Sequential(
-            nn.Linear(state_size + action_size, 32),
+            nn.Linear(state_size + action_size, layer1_size),
             nn.Tanh(),
-            nn.Linear(32, 16),
+            nn.Linear(layer1_size, layer2_size),
             nn.Tanh(),
-            nn.Linear(16, 1),
+            nn.Linear(layer2_size, layer3_size),
+            nn.Tanh(),
+            nn.Linear(layer3_size, 1),
         )
 
     def forward(self, state, action):
-        input_tensor = torch.cat([state, action], dim=1)
+        input_tensor = torch.cat([state.float(), action.float()], dim=1)
         return self.net(input_tensor).squeeze()

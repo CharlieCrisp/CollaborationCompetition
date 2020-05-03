@@ -15,23 +15,27 @@ class DDPGAgent:
         num_agents: int,
         state_size: int,
         action_size: int,
-        learning_epoch_size: int,
+        minibatch_size: int,
+        actor_lr,
+        critic_lr,
         epsilon=0.2,
-        learning_rate=0.0006,
+        gamma=0.99,
         saved_weights=None,
     ):
         self.state_size = state_size
         self.action_size = action_size
-        self.learning_epoch_size = learning_epoch_size
+        self.minibatch_size = minibatch_size
         self.num_agents = num_agents
         self.epsilon = epsilon
-        self.learning_rate = learning_rate
+        self.gamma = gamma
+        self.actor_lr = actor_lr
+        self.critic_lr = critic_lr
 
         self.action_value_estimator = ValueEstimatorNN(state_size, action_size).to(device)
         self.optimal_action_picker = ActorNN(state_size, action_size, seed=0).to(device)
 
-        self.action_value_estimator_optimizer = optim.Adam(self.action_value_estimator.parameters(), lr=learning_rate)
-        self.optimal_action_picker_optimizer = optim.Adam(self.optimal_action_picker.parameters(), lr=learning_rate)
+        self.action_value_estimator_optimizer = optim.Adam(self.action_value_estimator.parameters(), lr=critic_lr)
+        self.optimal_action_picker_optimizer = optim.Adam(self.optimal_action_picker.parameters(), lr=actor_lr)
 
         if saved_weights is not None:
             action_value_estimator_file, optimal_action_picker_file = saved_weights
@@ -49,14 +53,14 @@ class DDPGAgent:
             next_states,
             dones,
             sampled_indices,
-        ) = experience_replay_buffer.sample(self.learning_epoch_size)
+        ) = experience_replay_buffer.sample(self.minibatch_size)
 
         # Value estimation update
         q_estimate = self.action_value_estimator(states, actions)
 
         target_next_actions = target_agent.optimal_action_picker(next_states).detach()
         next_state_value = target_agent.action_value_estimator(next_states, target_next_actions).detach()
-        q_target = rewards + (torch.tensor(1) - dones.float()) * next_state_value
+        q_target = rewards + self.gamma * (torch.tensor(1) - dones.float()) * next_state_value
 
         value_loss = (q_estimate - q_target).pow(2)
 
@@ -89,9 +93,11 @@ class DDPGAgent:
             self.num_agents,
             self.state_size,
             self.action_size,
-            self.learning_epoch_size,
+            self.minibatch_size,
+            self.actor_lr,
+            self.critic_lr,
             self.epsilon,
-            self.learning_rate,
+            self.gamma
         )
         new_agent.action_value_estimator.load_state_dict(self.action_value_estimator.state_dict())
         new_agent.optimal_action_picker.load_state_dict(self.optimal_action_picker.state_dict())

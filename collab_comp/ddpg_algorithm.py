@@ -35,9 +35,12 @@ def ddpg(
     env: UnityEnvironment,
     brain_name: str,
     n_rollouts: int,
-    batch_size: int,
+    update_every: int,
+    learning_epoch_size: int,
     experience_buffer_size: int,
     solver: Solver,
+    action_noise_mean,
+    action_noise_std,
     tau: float = 1e-3,
     progress_trackers: Union[List[ProgressTracker], ProgressTracker] = None,
 ):
@@ -54,6 +57,9 @@ def ddpg(
             state2 = state[1]
             action1 = agent.act(state1).detach().data.cpu().numpy()
             action2 = agent.act(state2).detach().data.cpu().numpy()
+
+            action1 = np.clip(action1 + np.random.normal(action_noise_mean, action_noise_std, 2), -1, 1)
+            action2 = np.clip(action2 + np.random.normal(action_noise_mean, action_noise_std, 2), -1, 1)
 
             env_info = env.step(np.array([action1, action2]))[brain_name]
             num_actions += 1
@@ -83,13 +89,12 @@ def ddpg(
                 torch.tensor(done[1]),
                 max(replay_buffer.priorities or [0]),
             )
-
-            if num_actions % batch_size == 0 and num_actions > 0:
-                new_priority_indices, new_priorities = agent.learn(target_agent, replay_buffer)
-                replay_buffer.update_priority(new_priority_indices, new_priorities.detach().data.cpu().numpy())
-
-            soft_update(agent, target_agent, tau)
             state = next_state
+
+        if i % update_every == 0 and num_actions > 0 and len(replay_buffer) > learning_epoch_size:
+            new_priority_indices, new_priorities = agent.learn(target_agent, replay_buffer)
+            replay_buffer.update_priority(new_priority_indices, new_priorities.detach().data.cpu().numpy())
+            soft_update(agent, target_agent, tau)
 
         score = max(score1, score2)
         solver.record_score(score)
