@@ -23,29 +23,33 @@ def soft_update(agent: DDPGAgent, target_agent: DDPGAgent, tau):
         target_model (PyTorch model): weights will be copied to
         tau (float): interpolation parameter
     """
-    for target_param, local_param in zip(target_agent.optimal_action_picker.parameters(), agent.optimal_action_picker.parameters()):
+    for target_param, local_param in zip(target_agent.actor.parameters(), agent.actor.parameters()):
         target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
-    for target_param, local_param in zip(target_agent.action_value_estimator.parameters(), agent.action_value_estimator.parameters()):
+    for target_param, local_param in zip(target_agent.critic.parameters(), agent.critic.parameters()):
         target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
 
 
 def ddpg(
-    agent: DDPGAgent,
+    agents: List[DDPGAgent],
     env: UnityEnvironment,
     brain_name: str,
     n_rollouts: int,
     update_every: int,
+    num_epochs: int,
     learning_epoch_size: int,
     experience_buffer_size: int,
     solver: Solver,
     action_noise_mean,
     action_noise_std,
+    priority_eps,
+    priority_alpha,
     tau: float = 1e-3,
     progress_trackers: Union[List[ProgressTracker], ProgressTracker] = None,
 ):
     replay_buffer = PrioritisedReplayBuffer(experience_buffer_size)
-    target_agent = agent.copy()
+    agent1, agent2 = agents
+    target_agent1, target_agent2 = agent1.copy(), agent2.copy()
 
     num_actions = 0
     for i in range(n_rollouts):
@@ -53,15 +57,15 @@ def ddpg(
         state = torch.tensor(env_info.vector_observations).to(device).float()
         score1, score2 = 0, 0
         while not any(env_info.local_done):
-            state1 = state[0]
-            state2 = state[1]
-            action1 = agent.act(state1).detach().data.cpu().numpy()
-            action2 = agent.act(state2).detach().data.cpu().numpy()
+            action1 = agent1.act(state[0]).detach().data.cpu().numpy()
+            action2 = agent2.act(state[1]).detach().data.cpu().numpy()
 
             action1 = np.clip(action1 + np.random.normal(action_noise_mean, action_noise_std, 2), -1, 1)
             action2 = np.clip(action2 + np.random.normal(action_noise_mean, action_noise_std, 2), -1, 1)
 
-            env_info = env.step(np.array([action1, action2]))[brain_name]
+            actions = np.array([action1, action2])
+
+            env_info = env.step(actions)[brain_name]
             num_actions += 1
 
             done = env_info.local_done
@@ -72,29 +76,25 @@ def ddpg(
             score1 += reward1
             score2 += reward2
 
-            replay_buffer.add_experience(
-                state1,
-                torch.tensor(action1),
-                torch.tensor(reward1),
-                next_state[0],
-                torch.tensor(done[0]),
-                max(replay_buffer.priorities or [0]),
-            )
+            priority = (abs(reward1 + reward2) + priority_eps) ** priority_alpha
 
             replay_buffer.add_experience(
-                state2,
-                torch.tensor(action2),
-                torch.tensor(reward2),
-                next_state[1],
-                torch.tensor(done[1]),
-                max(replay_buffer.priorities or [0]),
+                state,
+                torch.tensor(actions),
+                torch.tensor(env_info.rewards),
+                next_state,
+                torch.tensor(done),
+                priority,
             )
             state = next_state
 
-        if i % update_every == 0 and num_actions > 0 and len(replay_buffer) > learning_epoch_size:
-            new_priority_indices, new_priorities = agent.learn(target_agent, replay_buffer)
-            replay_buffer.update_priority(new_priority_indices, new_priorities.detach().data.cpu().numpy())
-            soft_update(agent, target_agent, tau)
+        if i % update_every == 0 and len(replay_buffer) > learning_epoch_size:
+            print("learning")
+            for _ in range(num_epochs):
+                agent1.learn(target_agent1, replay_buffer, 0)
+                agent2.learn(target_agent2, replay_buffer, 1)
+                soft_update(agent1, target_agent1, tau)
+                soft_update(agent2, target_agent2, tau)
 
         score = max(score1, score2)
         solver.record_score(score)
@@ -102,4 +102,6 @@ def ddpg(
         for progress_tracker in progress_trackers:
             progress_tracker.record_score(score)
         if solver.is_solved():
-            agent.save_agent_state()
+            print(f"Solved in {i} episodes")
+            agent1.save_agent_state(1)
+            agent2.save_agent_state(2)

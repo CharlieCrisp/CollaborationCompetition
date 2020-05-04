@@ -43,7 +43,7 @@ class ValueEstimatorNN(nn.Module):
         layer2_size = 64
         layer3_size = 32
         self.net = nn.Sequential(
-            nn.Linear(state_size + action_size, layer1_size),
+            nn.Linear(state_size * 2 + action_size, layer1_size),
             nn.Tanh(),
             nn.Linear(layer1_size, layer2_size),
             nn.Tanh(),
@@ -53,5 +53,6 @@ class ValueEstimatorNN(nn.Module):
         )
 
     def forward(self, state, action):
+        state = state.reshape(len(state), 24 * 2)
         input_tensor = torch.cat([state.float(), action.float()], dim=1)
         return self.net(input_tensor).squeeze()

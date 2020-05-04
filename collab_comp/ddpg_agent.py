@@ -31,62 +31,55 @@ class DDPGAgent:
         self.actor_lr = actor_lr
         self.critic_lr = critic_lr
 
-        self.action_value_estimator = ValueEstimatorNN(state_size, action_size).to(device)
-        self.optimal_action_picker = ActorNN(state_size, action_size, seed=0).to(device)
+        self.critic = ValueEstimatorNN(state_size, action_size).to(device)
+        self.actor = ActorNN(state_size, action_size, seed=0).to(device)
 
-        self.action_value_estimator_optimizer = optim.Adam(self.action_value_estimator.parameters(), lr=critic_lr)
-        self.optimal_action_picker_optimizer = optim.Adam(self.optimal_action_picker.parameters(), lr=actor_lr)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
 
         if saved_weights is not None:
             action_value_estimator_file, optimal_action_picker_file = saved_weights
-            self.action_value_estimator.load_state_dict(torch.load(action_value_estimator_file))
-            self.optimal_action_picker.load_state_dict(torch.load(optimal_action_picker_file))
+            self.critic.load_state_dict(torch.load(action_value_estimator_file))
+            self.actor.load_state_dict(torch.load(optimal_action_picker_file))
 
     def act(self, state: torch.Tensor):
-        return self.optimal_action_picker(state)
+        return self.actor(state)
 
-    def learn(self, target_agent, experience_replay_buffer: PrioritisedReplayBuffer):
+    def learn(self, target_agent, experience_replay_buffer: PrioritisedReplayBuffer, agent_no):
         (
             states,
             actions,
             rewards,
             next_states,
             dones,
-            sampled_indices,
         ) = experience_replay_buffer.sample(self.minibatch_size)
 
         # Value estimation update
-        q_estimate = self.action_value_estimator(states, actions)
+        q_estimate = self.critic(states, actions[:, agent_no, :])
+        target_next_actions = target_agent.actor(next_states[:, agent_no, :])
+        next_state_value = target_agent.critic(next_states, target_next_actions)
+        q_target = rewards[:, agent_no] + self.gamma * (torch.tensor(1) - dones[:, agent_no].float()) * next_state_value
 
-        target_next_actions = target_agent.optimal_action_picker(next_states).detach()
-        next_state_value = target_agent.action_value_estimator(next_states, target_next_actions).detach()
-        q_target = rewards + self.gamma * (torch.tensor(1) - dones.float()) * next_state_value
+        value_loss = mse_loss(q_estimate, q_target)
 
-        value_loss = (q_estimate - q_target).pow(2)
-
-        self.action_value_estimator_optimizer.zero_grad()
-        value_loss.mean().backward()
-        self.action_value_estimator_optimizer.step()
+        self.critic_optimizer.zero_grad()
+        value_loss.backward()
+        self.critic_optimizer.step()
 
         # Policy update
-        optimal_actions = self.optimal_action_picker(states)
-        self.action_value_estimator.eval()
+        optimal_actions = self.actor(states[:, agent_no, :])
 
-        q_estimate_of_optimal_actions = self.action_value_estimator(states, optimal_actions)
+        q_estimate_of_optimal_actions = self.critic(states, optimal_actions)
 
         action_loss = -q_estimate_of_optimal_actions
 
-        self.optimal_action_picker_optimizer.zero_grad()
+        self.actor_optimizer.zero_grad()
         action_loss.mean().backward()
-        self.optimal_action_picker_optimizer.step()
+        self.actor_optimizer.step()
 
-        self.action_value_estimator.train()
-
-        return sampled_indices, value_loss
-
-    def save_agent_state(self):
-        torch.save(self.action_value_estimator.state_dict(), "saved_value_estimator.pth")
-        torch.save(self.optimal_action_picker.state_dict(), "saved_actor.pth")
+    def save_agent_state(self, agent_no):
+        torch.save(self.critic.state_dict(), f"saved_value_estimator_{agent_no}.pth")
+        torch.save(self.actor.state_dict(), f"saved_actor_{agent_no}.pth")
 
     def copy(self):
         new_agent = DDPGAgent(
@@ -99,6 +92,6 @@ class DDPGAgent:
             self.epsilon,
             self.gamma
         )
-        new_agent.action_value_estimator.load_state_dict(self.action_value_estimator.state_dict())
-        new_agent.optimal_action_picker.load_state_dict(self.optimal_action_picker.state_dict())
+        new_agent.critic.load_state_dict(self.critic.state_dict())
+        new_agent.actor.load_state_dict(self.actor.state_dict())
         return new_agent

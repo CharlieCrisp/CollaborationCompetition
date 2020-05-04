@@ -68,11 +68,7 @@ class PrioritisedReplayBuffer:
         )
         dones = torch.stack([self.dones[i] for i in sampled_indexes]).to(device)
 
-        return states, actions, rewards, next_states, dones, sampled_indexes
-
-    def update_priority(self, sampled_indexes, new_priorities):
-        for idx, new_priority in zip(sampled_indexes, new_priorities):
-            self.priorities[idx] = abs(new_priority) + self.e
+        return states, actions, rewards, next_states, dones
 
     def __len__(self):
         return len(self.states)

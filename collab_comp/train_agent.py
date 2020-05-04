@@ -29,17 +29,22 @@ def main(n_rollouts):
     print(f"Using state size {state_size} and action size {action_size}")
 
     num_agents = len(env_info.agents)
-    update_every = 200
-    tau = 1e-3
+    update_every = 1
+    tau = 1e-2
     experience_buffer_size = 100000
-    minibatch_size = 64
-    actor_lr = 0.0001
+    num_epochs = 15
+    minibatch_size = 128
+    actor_lr = 0.001
     critic_lr = 0.001
     action_noise_mean = 0
-    action_noise_std = 0.1
+    action_noise_std = 0.2
     gamma = 0.99
+    priority_eps = 0.01
+    priority_alpha = 0.5
 
-    agent = DDPGAgent(num_agents, state_size, action_size, minibatch_size, actor_lr=actor_lr, critic_lr=critic_lr, gamma=gamma)
+    agent1 = DDPGAgent(num_agents, state_size, action_size, minibatch_size, actor_lr=actor_lr, critic_lr=critic_lr, gamma=gamma)
+    agent2 = DDPGAgent(num_agents, state_size, action_size, minibatch_size, actor_lr=actor_lr, critic_lr=critic_lr, gamma=gamma)
+
     solver = AverageScoreSolver(
         solved_score=0.5, solved_score_period=100, num_agents=num_agents
     )
@@ -49,16 +54,19 @@ def main(n_rollouts):
     progress_bar = ProgressBarTracker(n_rollouts)
 
     ddpg(
-        agent,
+        [agent1, agent2],
         env,
         brain_name,
         n_rollouts,
         update_every,
+        num_epochs,
         minibatch_size,
         experience_buffer_size,
         solver,
         action_noise_mean,
         action_noise_std,
+        priority_eps,
+        priority_alpha,
         tau,
         [plotter, progress_bar],
     )
