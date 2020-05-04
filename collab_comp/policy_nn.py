@@ -36,9 +36,9 @@ class ActorNN(nn.Module):
         return x
 
 
-class ValueEstimatorNN(nn.Module):
+class Critic(nn.Module):
     def __init__(self, state_size, action_size):
-        super(ValueEstimatorNN, self).__init__()
+        super(Critic, self).__init__()
         layer1_size = 128
         layer2_size = 64
         layer3_size = 32

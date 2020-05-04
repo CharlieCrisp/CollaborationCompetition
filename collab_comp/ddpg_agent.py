@@ -3,7 +3,7 @@ import torch
 import torch.optim as optim
 from torch.nn.functional import mse_loss
 
-from collab_comp.policy_nn import ValueEstimatorNN, ActorNN
+from collab_comp.policy_nn import Critic, ActorNN
 from collab_comp.replay_buffer import PrioritisedReplayBuffer
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -20,7 +20,7 @@ class DDPGAgent:
         critic_lr,
         epsilon=0.2,
         gamma=0.99,
-        saved_weights=None,
+        saved_weights_agent_no=None,
     ):
         self.state_size = state_size
         self.action_size = action_size
@@ -31,16 +31,16 @@ class DDPGAgent:
         self.actor_lr = actor_lr
         self.critic_lr = critic_lr
 
-        self.critic = ValueEstimatorNN(state_size, action_size).to(device)
+        self.critic = Critic(state_size, action_size).to(device)
         self.actor = ActorNN(state_size, action_size, seed=0).to(device)
 
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
 
-        if saved_weights is not None:
-            action_value_estimator_file, optimal_action_picker_file = saved_weights
-            self.critic.load_state_dict(torch.load(action_value_estimator_file))
-            self.actor.load_state_dict(torch.load(optimal_action_picker_file))
+        if saved_weights_agent_no is not None:
+            print(f"saved_value_estimator_{saved_weights_agent_no}.pth")
+            self.critic.load_state_dict(torch.load(f"saved_critic_{saved_weights_agent_no}.pth"))
+            self.actor.load_state_dict(torch.load(f"saved_actor_{saved_weights_agent_no}.pth"))
 
     def act(self, state: torch.Tensor):
         return self.actor(state)
@@ -78,7 +78,7 @@ class DDPGAgent:
         self.actor_optimizer.step()
 
     def save_agent_state(self, agent_no):
-        torch.save(self.critic.state_dict(), f"saved_value_estimator_{agent_no}.pth")
+        torch.save(self.critic.state_dict(), f"saved_critic_{agent_no}.pth")
         torch.save(self.actor.state_dict(), f"saved_actor_{agent_no}.pth")
 
     def copy(self):
