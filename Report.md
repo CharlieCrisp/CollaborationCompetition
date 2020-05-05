@@ -6,7 +6,13 @@ Here I will describe the algorithms and details of how I solved this problem.
 ## Algorithm
 This project implements [Deep Deterministic Policy Gradients](https://spinningup.openai.com/en/latest/algorithms/ddpg.html).
 This algorithm uses an actor to learn the action that maximises reward and a critic to train the actor against.
-My project also uses a prioritized experience replay
+
+
+More specifically this project implements [Multi Agent Deep Deterministic Policy Gradients](https://arxiv.org/pdf/1706.02275.pdf) where each agent trains
+its own policy using local observations, but trains its critic using global observations.
+
+
+My project also uses a prioritized experience replay which takes the reward plus a baseline priority as the sample priority.
 
 ## Details
 ```python
@@ -39,10 +45,18 @@ layer3_size = 32
 My agent was able to solve this environment in 1221 episodes.
 ![My agent](solved_agent_1340_episodes.png)
 
+## Notes
+I have tried using the loss as a priority for experience sampling but found it produced worse performance.
+Source code for this can be found on the branch `fix/proper-per`. 
+
 ## Future work
 Here are my ideas on how I could improbe this project going forward:
- - Update priorities after learning for prioritized experience replay
-     - Also try use loss for sampling priority rather than reward
- - Try combining actor and critic into same network
+ - I could try combining actor and critic into same network so that they share weights.
+ This could save training time because the features learnt by each are shared
  - Noise
+     - The model currently implements random guassian noise added to the actions.
+     - An alternative would be to use [parameter space noise](https://arxiv.org/abs/1706.01905) which adds noise to the weight space
+     and generally produces better results.
+     - I could also try using different methods for producing noise such as an [OU process](https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
+     - Lastly I could try annealing noise during the training process so that exploration is greater towards the beginning.
      
