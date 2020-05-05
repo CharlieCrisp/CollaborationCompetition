@@ -15,7 +15,7 @@ Env downloads for mac:
 ## Running the project
 ```
 conda activate deep-reinforcement-learning
-python -m collab_comp.train_agent -n 750 --use-multiple-agents
+python -m collab_comp.train_agent
 ```
 
 You use `python -m collab_comp.train_agent --help` to find out more about the CLI interface including how to specify
@@ -24,16 +24,8 @@ which UnityML environment to use to train your agent.
 ## Seeing results
 Once you have trained agent weights (or if you want to use the checked in weights) you can see how the agent performs as follows:
 ```
-python -m collab_comp.play_game --use-multiple-agents
+python -m collab_comp.play_game 
 ```
-```
-python -m collab_comp.play_game --use-multiple-agents --actor-weights <filepath> --critic-weights <filepath>
-```
-
-## Running tests
-This repository contains some unit tests. You can run them from the repo root with
- - `conda activate deep-reinforcement-learning`
- - `pytest .`
  
  
 ## Environment details
@@ -44,7 +36,7 @@ Thus, the goal of each agent is to keep the ball in play.
 
 The observation space consists of 8 variables corresponding to the position and velocity of the ball and racket. 
 Each agent receives its own, local observation. 
-Two continuous actions are available, corresponding to movement toward (or away from) the net, and jumping.
+Two continuous actions are available, corresponding to movement toward (or away from) the net, and jumping and they take values between -1 and 1.
 
 The task is episodic, and in order to solve the environment, your agents must get an average score of +0.5 (over 100 consecutive episodes, after taking the maximum over both agents). 
 Specifically,
