@@ -38,7 +38,6 @@ class DDPGAgent:
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
 
         if saved_weights_agent_no is not None:
-            print(f"saved_value_estimator_{saved_weights_agent_no}.pth")
             self.critic.load_state_dict(torch.load(f"saved_critic_{saved_weights_agent_no}.pth"))
             self.actor.load_state_dict(torch.load(f"saved_actor_{saved_weights_agent_no}.pth"))
 

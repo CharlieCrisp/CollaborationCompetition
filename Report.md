@@ -36,12 +36,13 @@ layer3_size = 32
 ```
 
 ## Results
-My agent was able to solve this environment in 2039 episodes.
-![My agent](solved_agent_2270_episodes.png)
+My agent was able to solve this environment in 1221 episodes.
+![My agent](solved_agent_1340_episodes.png)
 
 ## Future work
 Here are my ideas on how I could improbe this project going forward:
  - Update priorities after learning for prioritized experience replay
      - Also try use loss for sampling priority rather than reward
  - Try combining actor and critic into same network
+ - Noise
      

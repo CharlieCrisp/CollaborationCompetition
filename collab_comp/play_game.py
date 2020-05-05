@@ -17,10 +17,10 @@ def main(n_rollouts):
     env = UnityEnvironment(file_name="Tennis.app")
 
     brain_name = env.brain_names[0]
-    env_info = env.reset(train_mode=True)[brain_name]
+    env_info = env.reset(train_mode=False)[brain_name]
     brain = env.brains[brain_name]
 
-    state_size = brain.vector_observation_space_size
+    state_size = brain.vector_observation_space_size * brain.num_stacked_vector_observations
     action_size = brain.vector_action_space_size
     print(f"Using state size {state_size} and action size {action_size}")
 
@@ -36,7 +36,7 @@ def main(n_rollouts):
     agent2 = DDPGAgent(num_agents, state_size, action_size, minibatch_size, actor_lr=actor_lr, critic_lr=critic_lr, gamma=gamma, saved_weights_agent_no=2)
 
     for i in range(n_rollouts):
-        env_info = env.reset(train_mode=True)[brain_name]
+        env_info = env.reset(train_mode=False)[brain_name]
         state = torch.tensor(env_info.vector_observations).to(device).float()
         while not any(env_info.local_done):
             action1 = agent1.act(state[0]).detach().data.cpu().numpy()

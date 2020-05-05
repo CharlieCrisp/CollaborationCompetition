@@ -89,7 +89,6 @@ def ddpg(
             state = next_state
 
         if i % update_every == 0 and len(replay_buffer) > learning_epoch_size:
-            print("learning")
             for _ in range(num_epochs):
                 agent1.learn(target_agent1, replay_buffer, 0)
                 agent2.learn(target_agent2, replay_buffer, 1)
